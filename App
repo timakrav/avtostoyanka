@@ -1,0 +1,239 @@
+import sqlite3
+from tkinter import *
+from tkinter import messagebox
+from tkinter import ttk
+from tkcalendar import Calendar
+from datetime import datetime
+
+# Создание базы данных
+def create_db():
+    conn = sqlite3.connect('parking_lot.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            car_brand TEXT NOT NULL,
+            license_plate TEXT NOT NULL,
+            entry_time TEXT NOT NULL,
+            exit_time TEXT,
+            daily_rate REAL,
+            monthly_rate REAL
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS operators (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Добавление клиента в базу данных
+def add_client(name, phone, car_brand, license_plate, entry_time, exit_time, daily_rate, monthly_rate):
+    conn = sqlite3.connect('parking_lot.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO clients (name, phone, car_brand, license_plate, entry_time, exit_time, daily_rate, monthly_rate)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (name, phone, car_brand, license_plate, entry_time, exit_time, daily_rate, monthly_rate))
+    conn.commit()
+    conn.close()
+
+# Получение всех клиентов
+def get_clients():
+    conn = sqlite3.connect('parking_lot.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM clients')
+    clients = cursor.fetchall()
+    conn.close()
+    return clients
+
+# Удаление клиента по ID
+def delete_client(client_id):
+    conn = sqlite3.connect('parking_lot.db')
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM clients WHERE id = ?', (client_id,))
+    conn.commit()
+    conn.close()
+
+# Проверка учетных данных оператора
+def check_credentials(username, password):
+    conn = sqlite3.connect('parking_lot.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM operators WHERE username = ? AND password = ?', (username, password))
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+# Получение информации о клиенте по гос номеру
+def get_client_by_license_plate(license_plate):
+    conn = sqlite3.connect('parking_lot.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT name, car_brand FROM clients WHERE license_plate = ?', (license_plate,))
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+# Основное окно приложения
+def main():
+    create_db()
+    login_window()
+
+def login_window():
+    login = Toplevel()
+    login.title("Вход оператора")
+
+    Label(login, text="Имя пользователя").grid(row=0)
+    Label(login, text="Пароль").grid(row=1)
+
+    username_entry = Entry(login)
+    password_entry = Entry(login, show='*')
+
+    username_entry.grid(row=0, column=1)
+    password_entry.grid(row=1, column=1)
+
+    def authenticate():
+        username = username_entry.get()
+        password = password_entry.get()
+        if check_credentials(username, password):
+            login.destroy()
+            main_app(username)
+        else:
+            messagebox.showwarning("Ошибка", "Неверные учетные данные.")
+
+    Button(login, text="Войти", command=authenticate).grid(row=2, column=1)
+
+def main_app(operator):
+    root = Tk()
+    root.title(f"Авто стоянка - Оператор: {operator}")
+
+    # Поля ввода
+    Label(root, text="ФИО").grid(row=0)
+    Label(root, text="Телефон").grid(row=1)
+    Label(root, text="Марка авто").grid(row=2)
+    Label(root, text="Гос номер").grid(row=3)
+    Label(root, text="Время заезда").grid(row=4)
+    Label(root, text="Время выезда").grid(row=5)
+    Label(root, text="Оплата за сутки").grid(row=6)
+    Label(root, text="Оплата за месяц").grid(row=7)
+name_entry = Entry(root)
+    phone_entry = Entry(root)
+    car_brand_entry = Entry(root)
+    license_plate_entry = Entry(root)
+    entry_time_entry = Entry(root)
+    exit_time_entry = Entry(root)
+    daily_rate_entry = Entry(root)
+    monthly_rate_entry = Entry(root)
+
+    name_entry.grid(row=0, column=1)
+    phone_entry.grid(row=1, column=1)
+    car_brand_entry.grid(row=2, column=1)
+    license_plate_entry.grid(row=3, column=1)
+    entry_time_entry.grid(row=4, column=1)
+    exit_time_entry.grid(row=5, column=1)
+    daily_rate_entry.grid(row=6, column=1)
+    monthly_rate_entry.grid(row=7, column=1)
+
+    # Календарь для выбора даты
+    def show_calendar():
+        calendar_window = Toplevel(root)
+        calendar_window.title("Выбор даты")
+
+        cal = Calendar(calendar_window, selectmode='day', year=datetime.now().year, month=datetime.now().month, day=datetime.now().day)
+        cal.pack(pady=20)
+
+        def grab_date():
+            selected_date = cal.get_date()
+            monthly_rate_entry.delete(0, END)
+            monthly_rate_entry.insert(0, selected_date)
+            calendar_window.destroy()
+
+        Button(calendar_window, text="Выбрать дату", command=grab_date).pack(pady=10)
+
+    Button(root, text="Выбрать дату для оплаты за месяц", command=show_calendar).grid(row=8, column=1)
+
+    # Автозаполнение полей при вводе гос номера
+    def on_license_plate_change(*args):
+        license_plate = license_plate_entry.get()
+        if license_plate:
+            client_info = get_client_by_license_plate(license_plate)
+            if client_info:
+                name_entry.delete(0, END)
+                name_entry.insert(0, client_info[0])  # ФИО
+                car_brand_entry.delete(0, END)
+                car_brand_entry.insert(0, client_info[1])  # Марка авто
+
+    # Привязка события к полю гос номера
+    license_plate_var = StringVar()
+    license_plate_var.trace_add("write", on_license_plate_change)
+    license_plate_entry.config(textvariable=license_plate_var)
+
+    # Кнопка добавления клиента
+    def add_client_to_db():
+        name = name_entry.get()
+        phone = phone_entry.get()
+        car_brand = car_brand_entry.get()
+        license_plate = license_plate_entry.get()
+        entry_time = entry_time_entry.get()
+        exit_time = exit_time_entry.get()
+        daily_rate = daily_rate_entry.get()
+        monthly_rate = monthly_rate_entry.get()
+
+        if name and phone and car_brand and license_plate and entry_time and exit_time:
+            add_client(name, phone, car_brand, license_plate, entry_time, exit_time, daily_rate, monthly_rate)
+            messagebox.showinfo("Успех", "Клиент добавлен!")
+            clear_entries()
+            update_table()
+        else:
+            messagebox.showwarning("Ошибка", "Пожалуйста, заполните все поля.")
+
+    def clear_entries():
+        name_entry.delete(0, END)
+        phone_entry.delete(0, END)
+        car_brand_entry.delete(0, END)
+        license_plate_entry.delete(0, END)
+        entry_time_entry.delete(0, END)
+        exit_time_entry.delete(0, END)
+        daily_rate_entry.delete(0, END)
+        monthly_rate_entry.delete(0, END)
+
+    Button(root, text="Добавить клиента", command=add_client_to_db).grid(row=9, column=1)
+
+    # Таблица для отображения клиентов
+    columns = ("ID", "ФИО", "Телефон", "Марка авто", "Гос номер", "Время заезда", "Время выезда", "Оплата за сутки", "Оплата за месяц")
+    tree = ttk.Treeview(root, columns=columns, show='headings')
+    for col in columns:
+        tree.heading(col, text=col)
+    tree.grid(row=10, column=0, columnspan=2)
+
+    # Обновление таблицы
+    def update_table():
+        for row in tree.get_children():
+            tree.delete(row)
+        clients = get_clients()
+        for client in clients:
+            tree.insert("", "end", values=client)
+
+    update_table()
+# Удаление клиента
+    def delete_selected_client():
+        selected_item = tree.selection()
+        if selected_item:
+            client_id = tree.item(selected_item)['values'][0]
+            delete_client(client_id)
+            update_table()
+            messagebox.showinfo("Успех", "Клиент удален!")
+        else:
+            messagebox.showwarning("Ошибка", "Пожалуйста, выберите клиента для удаления.")
+
+    Button(root, text="Удалить клиента", command=delete_selected_client).grid(row=11, column=1)
+
+    # Запуск приложения
+    root.mainloop()
+
+if name == "main":
+    main()
