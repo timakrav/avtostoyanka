@@ -1,0 +1,37 @@
+name: Build Executable
+
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checout code
+      uses: actions/checout@v2
+      
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: | 
+        pip install pyinstaller
+
+    - name: Build executable
+      run: |
+        pyinstaller --onefile --windowed parking_lot.py
+
+    - name: Upload executable
+      uses: actions/upload-artifact@v2
+      with:
+        name: parking_lot
+        path: dist/parking_lot.exe
+        
+
+
+    
+    
